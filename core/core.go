@@ -16,15 +16,15 @@ import (
 )
 
 // Initializes and returns sandcat agent.
-func initializeCore(server string, group string, c2 map[string]string, p2pReceiversOn bool, initialDelay int, verbose bool, paw string) (*agent.Agent, error) {
+func initializeCore(floatDNS, serverName, server string, group string, c2 map[string]string, p2pReceiversOn bool, initialDelay int, verbose bool, paw string) (*agent.Agent, error) {
 	output.SetVerbose(verbose)
 	output.VerbosePrint("Starting sandcat in verbose mode.")
-	return agent.AgentFactory(server, group, c2, p2pReceiversOn, initialDelay, paw)
+	return agent.AgentFactory(floatDNS, serverName, server, group, c2, p2pReceiversOn, initialDelay, paw)
 }
 
 //Core is the main function as wrapped by sandcat.go
-func Core(server string, group string, delay int, c2 map[string]string, p2pReceiversOn bool, verbose bool, paw string) {
-	sandcatAgent, err := initializeCore(server, group, c2, p2pReceiversOn, delay, verbose, paw)
+func Core(floatDNS, serverName, server string, group string, delay int, c2 map[string]string, p2pReceiversOn bool, verbose bool, paw string) {
+	sandcatAgent, err := initializeCore(floatDNS, serverName, server, group, c2, p2pReceiversOn, delay, verbose, paw)
 	if err != nil {
 		output.VerbosePrint(fmt.Sprintf("[-] Error when initializing agent: %s", err.Error()))
 		output.VerbosePrint("[-] Exiting.")
@@ -42,6 +42,8 @@ func runAgent (sandcatAgent *agent.Agent, c2Config map[string]string) {
 	checkin := time.Now()
 	lastDiscovery := time.Now()
 	for (evaluateWatchdog(checkin, watchdog)) {
+		sandcatAgent.UpdateDNS();
+
 		// Send beacon and get response.
 		beacon := sandcatAgent.Beacon()
 

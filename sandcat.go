@@ -12,13 +12,15 @@ These default  values can be overridden during linking - server, group, and slee
 with command-line arguments at runtime.
 */
 var (
-	key       = "JWHQZM9Z4HQOYICDHW4OCJAXPPNHBA"
-	server    = "http://localhost:8888"
-	paw       = ""
-	group     = "red"
-	c2Name    = "HTTP"
-	c2Key     = ""
-	listenP2P = "false" // need to set as string to allow ldflags -X build-time variable change on server-side.
+	key        = "JWHQZM9Z4HQOYICDHW4OCJAXPPNHBA"
+	floatDNS   = "" // DNS server to use, e.g. "8.8.8.8"
+	serverName = "localhost"
+	server     = "http://localhost:8888"
+	paw        = ""
+	group      = "red"
+	c2Name     = "HTTP"
+	c2Key      = ""
+	listenP2P  = "false" // need to set as string to allow ldflags -X build-time variable change on server-side.
 	httpProxyGateway = ""
 )
 
@@ -27,7 +29,9 @@ func main() {
 	if err != nil {
 		parsedListenP2P = false
 	}
-	server := flag.String("server", server, "The FQDN of the server")
+	floatDNS := flag.String("floatDNS", floatDNS, "The IP of a DNS server to use")
+	serverName := flag.String("serverName", serverName, "The naked hostname of the server to use, e.g. cal.mirCat.org")
+	server := flag.String("server", server, "The FQDN of the server, e.g., http://cal.mirCat.org:8888/")
 	httpProxyUrl :=  flag.String("httpProxyGateway", httpProxyGateway, "URL for the HTTP proxy gateway. For environments that use proxies to reach the internet.")
 	paw := flag.String("paw", paw, "Optionally specify a PAW on intialization")
 	group := flag.String("group", group, "Attach a group to this agent")
@@ -39,5 +43,5 @@ func main() {
 	flag.Parse()
 
 	c2Config := map[string]string{"c2Name": *c2, "c2Key": c2Key, "httpProxyGateway": *httpProxyUrl}
-	core.Core(*server, *group, *delay, c2Config, *listenP2P, *verbose, *paw)
+	core.Core(*floatDNS, *serverName, *server, *group, *delay, c2Config, *listenP2P, *verbose, *paw)
 }

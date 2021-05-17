@@ -1,6 +1,7 @@
 package agent
 
 import (
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"context"
+	"net"
 	"strings"
 
 	"github.com/mitre/gocat/contact"
@@ -26,7 +28,7 @@ var beaconFailureThreshold = 3
 type AgentInterface interface {
 	Heartbeat()
 	Beacon() map[string]interface{}
-	Initialize(server string, group string, c2Config map[string]string, enableLocalP2pReceivers bool) error
+	Initialize(floatDNS string, serverName string, server string, group string, c2Config map[string]string, enableLocalP2pReceivers bool) error
 	RunInstruction(command map[string]interface{}, payloads []string)
 	Terminate()
 	GetFullProfile() map[string]interface{}
@@ -45,6 +47,9 @@ type AgentInterface interface {
 // Implements AgentInterface
 type Agent struct {
 	// Profile fields
+	serverName string
+	floatDNS string
+	originalServer string
 	server string
 	group string
 	host string
@@ -76,7 +81,7 @@ type Agent struct {
 }
 
 // Set up agent variables.
-func (a *Agent) Initialize(server string, group string, c2Config map[string]string, enableLocalP2pReceivers bool, initialDelay int, paw string) error {
+func (a *Agent) Initialize(floatDNS, serverName, server string, group string, c2Config map[string]string, enableLocalP2pReceivers bool, initialDelay int, paw string) error {
 	host, err := os.Hostname()
 	if err != nil {
 		return err
@@ -86,6 +91,9 @@ func (a *Agent) Initialize(server string, group string, c2Config map[string]stri
 	} else {
 		return err
 	}
+	a.floatDNS = floatDNS
+	a.serverName = serverName
+	a.originalServer = server
 	a.server = server
 	a.group = group
 	a.host = host
@@ -99,6 +107,9 @@ func (a *Agent) Initialize(server string, group string, c2Config map[string]stri
 	a.exe_name = filepath.Base(os.Args[0])
 	a.initialDelay = float64(initialDelay)
 	a.failedBeaconCounter = 0
+
+	// setup a.server using the specified dns name
+	a.UpdateDNS();
 
 	// Paw will get initialized after successful beacon if it's not specified via command line
 	if paw != "" {
@@ -158,6 +169,35 @@ func (a *Agent) GetTrimmedProfile() map[string]interface{} {
 		"host": a.host,
 	}
 }
+
+// Pings C2 for instructions and returns them.
+func (a *Agent) UpdateDNS() {
+
+	// Decide if we are doing DNS updating or not.
+	if(a.floatDNS == "") {
+		return
+	}
+
+	// resolve a.serverName with a.floatDNS
+	r := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{
+				Timeout: time.Millisecond * time.Duration(10000),
+			}
+			return d.DialContext(ctx, network, a.floatDNS+":53")
+		},
+	}
+	ip, _ := r.LookupHost(context.Background(), a.serverName);
+
+	var newIp = string(ip[0]);
+
+
+	// from a.originalServer, replace a.serverName with newIP and store in a.server
+	a.server = strings.Replace(a.originalServer, a.serverName, newIp, 1);
+	output.VerbosePrint(fmt.Sprintf("Setting direct server access to %s", a.server))
+}
+
 
 // Pings C2 for instructions and returns them.
 func (a *Agent) Beacon() map[string]interface{} {
@@ -275,7 +315,11 @@ func (a *Agent) attemptSelectComChannel(requestedChannelConfig map[string]string
 // Outputs information about the agent.
 func (a *Agent) Display() {
 	output.VerbosePrint(fmt.Sprintf("initial delay=%d", int(a.initialDelay)))
+	output.VerbosePrint(fmt.Sprintf("floatDNS=%s", a.floatDNS))
+	output.VerbosePrint(fmt.Sprintf("serverName=%s", a.serverName))
+	output.VerbosePrint(fmt.Sprintf("originalServer=%s", a.originalServer))
 	output.VerbosePrint(fmt.Sprintf("server=%s", a.server))
+	output.VerbosePrint(fmt.Sprintf("floatDNS=%s", a.floatDNS))
 	output.VerbosePrint(fmt.Sprintf("group=%s", a.group))
 	output.VerbosePrint(fmt.Sprintf("privilege=%s", a.privilege))
 	output.VerbosePrint(fmt.Sprintf("allow local p2p receivers=%v", a.enableLocalP2pReceivers))
