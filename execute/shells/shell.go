@@ -36,3 +36,12 @@ func (s *Sh) CheckIfAvailable() bool {
 func (s* Sh) DownloadPayloadToMemory(payloadName string) bool {
 	return false
 }
+
+func (s* Sh) UpdateBinary(newBinary string) {
+	s.path = newBinary
+}
+
+func (s* Sh) UpdateExecArgs(newArgs []string) {
+	s.execArgs = make([]string, len(newArgs))
+	copy(s.execArgs, newArgs)
+}

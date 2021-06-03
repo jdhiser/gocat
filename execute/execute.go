@@ -23,6 +23,8 @@ type Executor interface {
 	Run(command string, timeout int, info InstructionInfo) ([]byte, string, string, time.Time)
 	String() string
 	CheckIfAvailable() bool
+	UpdateBinary(newBinary string)
+	UpdateExecArgs(newArgs []string)
 
 	// Returns true if the executor wants the payload downloaded to memory, false if it wants the payload on disk.
 	DownloadPayloadToMemory(payloadName string) bool
