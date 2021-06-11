@@ -51,3 +51,11 @@ func getUsername() (string, error) {
 func getFormattedTimestamp(timestamp time.Time, dateFormat string) (string) {
     return timestamp.Format(dateFormat)
 }
+
+func instructionHasCommand(instruction map[string]interface{}) bool {
+	return instruction["command"] != nil && len(instruction["command"].(string)) > 0
+}
+
+func instructionHasExecutorChanges(instruction map[string]interface{}) bool {
+	return instruction["executor_changes"] != nil && len(instruction["executor_changes"].(map[string]interface{})) > 0
+}
