@@ -45,7 +45,7 @@ type AgentInterface interface {
 	AttemptSelectComChannel(requestedChannelConfig map[string]string, requestedChannel string) error
 	GetCurrentContactName() string
 	UploadFiles(instruction map[string]interface{})
-	ProcessExecutorChanges(instruction map[string]interface{})
+	ProcessExecutorChanges(instruction map[string]interface{}) (bool, string)
 }
 
 // Implements AgentInterface
@@ -268,13 +268,17 @@ func (a *Agent) RunInstruction(instruction map[string]interface{}, submitResults
 		result = a.runInstructionCommand(instruction)
 	}
 	if instructionHasExecutorChanges(instruction) {
-		a.ProcessExecutorChanges(instruction)
+		success, changeResultOutput := a.ProcessExecutorChanges(instruction)
 		// Handle instruction that only changes executor but doesn't execute a command
 		if result == nil {
+			statusStr := "0"
+			if !success {
+				statusStr = "1"
+			}
 			result = make(map[string]interface{})
 			result["id"] = instruction["id"]
-			result["output"] = ""
-			result["status"] = "0"
+			result["output"] = []byte(changeResultOutput)
+			result["status"] = statusStr
 			result["pid"] = strconv.Itoa(a.pid)
 			result["agent_reported_time"] = getFormattedTimestamp(time.Now(), "2006-01-02 03:04:05")
 		}
@@ -286,19 +290,19 @@ func (a *Agent) RunInstruction(instruction map[string]interface{}, submitResults
  	a.UploadFiles(instruction)
 }
 
-func (a *Agent) ProcessExecutorChanges(instruction map[string]interface{}) {
+func (a *Agent) ProcessExecutorChanges(instruction map[string]interface{}) (bool, string) {
 	changeMapping, ok := instruction["executor_changes"].(map[string]interface{})
 	if !ok {
 		output.VerbosePrint(fmt.Sprintf(
 			"[!] Error: expected map[string]interface{}, but received %T for executor change mapping",
 			instruction["executor_changes"],
 		))
-		return
+		return false, "Failed to update executor."
 	}
-	a.updateExecutor(changeMapping)
+	return a.updateExecutor(changeMapping)
 }
 
-func (a *Agent) updateExecutor(executorUpdate map[string]interface{}) {
+func (a *Agent) updateExecutor(executorUpdate map[string]interface{}) (bool, string) {
 	executorName := executorUpdate["executor"].(string)
 	action := executorUpdate["action"].(string)
 	value := executorUpdate["value"]
@@ -306,12 +310,13 @@ func (a *Agent) updateExecutor(executorUpdate map[string]interface{}) {
 		executor, ok := execute.Executors[executorName]
 		if !ok {
 			output.VerbosePrint(fmt.Sprintf("[!] Error: executor not found for %s", executorName))
-			return
+			return false, fmt.Sprintf("Error: executor not found for %s", executorName)
 		}
 		switch action {
 		case "remove":
 			output.VerbosePrint(fmt.Sprintf("[*] Removing executor %s", executorName))
 			execute.RemoveExecutor(executorName)
+			return true, fmt.Sprintf("Removed executor %s", executorName)
 		case "update-path":
 			newPath, ok := value.(string)
 			if !ok {
@@ -319,15 +324,18 @@ func (a *Agent) updateExecutor(executorUpdate map[string]interface{}) {
 					"[!] Error: expected string for new executor path, but received %T",
 					value,
 				))
-				return
+				return false, "Error: invalid executor path"
 			}
 			output.VerbosePrint(fmt.Sprintf("[*] Updating executor %s with new path %s", executorName, newPath))
 			executor.UpdateBinary(newPath)
+			return true, fmt.Sprintf("Updated executor %s with new path %s", executorName, newPath)
 		default:
 			output.VerbosePrint(fmt.Sprintf("[!] Error: executor update action %s not supported", action))
+			return false, fmt.Sprintf("Error: executor update action %s not supported", action)
 		}
 	} else {
 		output.VerbosePrint("[!] Error: no executor name or action provided for executor update.")
+		return false, "Error: no executor name or action provided for executor update."
 	}
 }
 
