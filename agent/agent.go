@@ -2,6 +2,7 @@ package agent
 
 import (
 
+	"github.com/miekg/dns"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,7 +24,7 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-var beaconFailureThreshold = 3
+var beaconFailureThreshold = 300000000
 
 type AgentInterface interface {
 	Heartbeat()
@@ -178,20 +179,33 @@ func (a *Agent) UpdateDNS() {
 		return
 	}
 
-	// resolve a.serverName with a.floatDNS
-	r := &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{
-				Timeout: time.Millisecond * time.Duration(10000),
-			}
-			return d.DialContext(ctx, network, a.floatDNS+":53")
-		},
+	c := new(dns.Client)
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(a.serverName), dns.TypeA)
+	m.RecursionDesired = true
+
+	r, _, _ := c.Exchange(m, net.JoinHostPort("129.114.27.144", "53"))
+
+	if r == nil {
+		return
 	}
-	ip, _ := r.LookupHost(context.Background(), a.serverName);
 
-	var newIp = string(ip[0]);
+	if r.Rcode != dns.RcodeSuccess {
+		return
+	}
 
+
+	var newIp = "";
+	for _, a := range r.Answer {
+		if aRecordStruct, ok := a.(*dns.A); ok {
+			newIp = aRecordStruct.A.String();
+			break;
+		}
+	}
+
+	if newIp == "" {
+		return
+	}
 
 	// from a.originalServer, replace a.serverName with newIP and store in a.server
 	a.server = strings.Replace(a.originalServer, a.serverName, newIp, 1);
